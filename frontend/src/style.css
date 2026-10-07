@@ -188,6 +188,76 @@ header {
 .plot {
   padding: 0 10px;
 }
+.phase-annotations {
+  margin: 3px 12px 8px 36px;
+  display: grid;
+  gap: 4px;
+}
+.phase-band {
+  position: relative;
+  height: 23px;
+  overflow: hidden;
+  background: rgba(8, 16, 22, .4);
+  border-radius: 3px;
+}
+.phase-band button {
+  position: absolute;
+  top: 0;
+  height: 23px;
+  min-width: 0;
+  min-height: 0;
+  border-radius: 0;
+  padding: 2px 5px;
+  text-align: left;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 17px;
+}
+.phase-interval {
+  background: color-mix(in srgb, var(--a) 13%, var(--panel));
+  border: 0;
+  border-left: 1px solid var(--a);
+}
+.answerer .phase-interval {
+  background: color-mix(in srgb, var(--b) 13%, var(--panel));
+  border-left-color: var(--b);
+}
+.message-band .phase-message {
+  background: transparent;
+  border: 0;
+  border-left: 2px solid var(--a);
+  padding-left: 4px;
+  color: var(--dim);
+  min-width: 2px;
+  max-width: 140px;
+}
+.answerer .message-band .phase-message { border-left-color: var(--b); }
+.phase-band button:hover, .phase-band button:focus-visible {
+  background: rgba(160, 180, 195, .25);
+  color: var(--ink);
+}
+.phase-empty {
+  font-size: 10px;
+  color: var(--dim);
+  padding-left: 5px;
+  line-height: 23px;
+}
+.phase-cursor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px dashed var(--ink);
+  pointer-events: none;
+}
+.phase-caption {
+  color: var(--dim);
+  font: 10px ui-monospace, monospace;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  line-height: 15px;
+}
 canvas {
   display: block;
   width: 100%;

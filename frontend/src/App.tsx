@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ReceiverDiagnosticsPanel } from "./diagnostics";
 import { NegotiationControls, NegotiationInspector } from "./negotiation";
+import { PhaseStore } from "./phase-state";
 import { AudioMonitor } from "./audio";
 import {
   decodePacket,
@@ -14,6 +15,7 @@ import {
   Spectrogram,
   PlotViewport,
   PlotNavigation,
+  PhaseAnnotations,
 } from "./plots";
 const emptyEndpoint = {
   state: "idle",
@@ -94,11 +96,25 @@ export default function App() {
       new Map<string, { type: string; endpoint?: Endpoint; text?: string }>(),
     );
   const [store] = useState(() => new SignalStore()),
+    [phases] = useState(() => new PhaseStore()),
     [audio] = useState(() => new AudioMonitor()),
     [viewport] = useState(() => new PlotViewport()),
     [, updateNavigation] = useState(0);
+  const [hoverSample, setHoverSample] = useState<number | null>(null),
+    [pinnedSample, setPinnedSample] = useState<number | null>(null);
+  const graphCursor = pinnedSample ?? selected?.sample_index ?? hoverSample;
+  const onCursorChange = useCallback((sample: number | null, pin = false) => {
+    if (pin && sample !== null) {
+      viewport.seek(viewport.range(store).start, store);
+      setSelected(null);
+      setPinnedSample(sample);
+      setHoverSample(null);
+    } else setHoverSample(sample);
+  }, [store, viewport]);
   const onNavigate = useCallback(() => {
     setSelected(null);
+    setPinnedSample(null);
+    setHoverSample(null);
     updateNavigation((value) => value + 1);
   }, []);
   const command = useCallback(
@@ -139,6 +155,8 @@ export default function App() {
         : store.latest,
     [audio, store],
   );
+  const graphClock = useCallback(() => viewport.end === null
+    ? clock() : Math.min(store.latest, viewport.range(store).end), [clock, store, viewport]);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("modem-theme", theme);
@@ -155,9 +173,12 @@ export default function App() {
     function reset(g: number) {
       generation.current = g;
       store.reset(g);
+      phases.reset(g);
       viewport.reset();
       audio.reset(g);
       setSelected(null);
+      setPinnedSample(null);
+      setHoverSample(null);
       setEvents([]);
       setNegotiationEvents([]);
       setReceived({ caller: "", answerer: "" });
@@ -187,6 +208,7 @@ export default function App() {
             );
           if (p.generation !== generation.current) return;
           store.push(p);
+          phases.prune(store.earliest);
           if (active.current)
             audio.push(p.streams, p.startSample, p.generation);
         } catch (e) {
@@ -252,6 +274,7 @@ export default function App() {
           if (m.generation < generation.current) return;
           if (m.generation > generation.current) reset(m.generation);
           setEvents((prev) => [...prev, m].slice(-500));
+          phases.append(m);
           if (m.negotiation || /negotiation|v8|menu|ansam|capabilit/.test(m.event_type))
             setNegotiationEvents((prev) => [...prev, m].slice(-200));
           if (m.endpoint === "caller" || m.endpoint === "answerer") {
@@ -316,7 +339,7 @@ export default function App() {
       control.close();
       audio.close();
     };
-  }, [audio, store, viewport]);
+  }, [audio, store, viewport, phases]);
   const configure = (patch: Partial<Config>) =>
     command("configure", { config: patch });
   const listen = async (value: number) => {
@@ -511,12 +534,23 @@ export default function App() {
                   <Spectrogram
                     store={store}
                     stream={views[endpoint]}
-                    cursor={selected?.sample_index ?? null}
-                    clock={clock}
+                    cursor={graphCursor}
+                    onCursorChange={onCursorChange}
+                    clock={graphClock}
                     viewport={viewport}
                     onNavigate={onNavigate}
                     label={names[endpoint]}
                   />
+                  <PhaseAnnotations store={store} viewport={viewport} phases={phases}
+                    endpoint={endpoint} stream={views[endpoint]}
+                    cursor={graphCursor} clock={graphClock}
+                    onSelectPhase={(sample) => {
+                      setSelected(null);
+                      setHoverSample(null);
+                      setPinnedSample(sample);
+                      viewport.focus(sample, store);
+                      updateNavigation(value => value + 1);
+                    }} />
                 </div>
                 <div className="readout">
                   <span className={e.carrier_lock ? "locked" : ""}>
@@ -591,6 +625,8 @@ export default function App() {
             viewport.focus(event.sample_index, store);
             updateNavigation((value) => value + 1);
             setSelected(event);
+            setPinnedSample(null);
+            setHoverSample(null);
           }} />
         <section className="panel inspector">
           <div className="panel-head">
@@ -604,7 +640,7 @@ export default function App() {
           <div className="inspection">
             <div className="clock">
               {(
-                (selected?.sample_index ??
+                (graphCursor ??
                   (viewport.end === null
                     ? clock()
                     : viewport.range(store).end)) / 48000
@@ -615,6 +651,8 @@ export default function App() {
               <strong>
                 {selected
                   ? `${names[selected.endpoint] || "Line"} · ${selected.event_type.replaceAll("_", " ")}`
+                  : graphCursor !== null
+                    ? "Inspecting shared graph cursor"
                   : viewport.end === null
                     ? "Following the live sample clock"
                     : "Inspecting signal history"}
@@ -622,7 +660,7 @@ export default function App() {
               <p>
                 {selected
                   ? selected.detail
-                  : "Zoom or pan either graph, or select an event. Both graphs stay aligned while the modems keep running."}
+                  : "Move over either graph to inspect both, click to pin the cursor, or select a phase. Drag pans; Follow live clears the cursor."}
               </p>
               <p className="small">
                 {selected && selected.sample_index < store.earliest
@@ -631,7 +669,7 @@ export default function App() {
                 Signal history inspection; receiver diagnostics below the terminals always show the live receiver.
               </p>
             </div>
-            {selected && (
+            {(selected || pinnedSample !== null) && (
               <button
                 onClick={() => {
                   viewport.followLive();
@@ -660,6 +698,8 @@ export default function App() {
                       viewport.focus(event.sample_index, store);
                       updateNavigation((value) => value + 1);
                       setSelected(event);
+                      setPinnedSample(null);
+                      setHoverSample(null);
                     }}
                   >
                     <time>{(event.sample_index / 48000).toFixed(3)} s</time>

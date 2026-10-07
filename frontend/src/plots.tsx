@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { PhaseStore } from "./phase-state";
+import type { Endpoint } from "./protocol";
 import {
   PlotViewport,
   SignalStore,
@@ -100,7 +102,7 @@ export function PlotNavigation({
         }
       />
       <small id="plot-navigation-help">
-        Wheel zooms · drag pans · last {HISTORY_SECONDS / 60} min
+        Hover compares · click pins · wheel zooms · drag pans · last {HISTORY_SECONDS / 60} min
       </small>
     </div>
   );
@@ -113,6 +115,7 @@ export function Spectrogram({
   clock,
   viewport,
   onNavigate,
+  onCursorChange,
   label,
 }: {
   store: SignalStore;
@@ -121,10 +124,16 @@ export function Spectrogram({
   clock: () => number;
   viewport: PlotViewport;
   onNavigate: () => void;
+  onCursorChange?: (sample: number | null, pin?: boolean) => void;
   label: string;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
-  const drag = useRef<{ x: number; end: number; span: number } | null>(null);
+  const drag = useRef<{ x: number; end: number; span: number; moved: boolean } | null>(null);
+  const sampleAt = (element: HTMLCanvasElement, clientX: number) => {
+    const bounds = element.getBoundingClientRect();
+    const fraction = Math.max(0, Math.min(1, (clientX - bounds.left - 36) / Math.max(1, bounds.width - 48)));
+    return Math.min(store.latest, Math.round(viewport.range(store).start + fraction * viewport.span));
+  };
   useEffect(() => {
     const c = canvas.current!;
     const wheel = (event: WheelEvent) => {
@@ -274,6 +283,8 @@ export function Spectrogram({
       ctx.fillText("seconds", Math.max(left, width - 70), 198);
       const sample = cursor ?? clock(),
         x = left + ((sample - start) / viewport.span) * w;
+      c.dataset.cursorSample = String(sample);
+      c.dataset.cursorVisible = String(x >= left && x <= left + w);
       if (x >= left && x <= left + w) {
         ctx.strokeStyle = cursor === null ? "#a7bac7" : "#fff";
         ctx.setLineDash([3, 3]);
@@ -282,6 +293,15 @@ export function Spectrogram({
         ctx.lineTo(x, top + h);
         ctx.stroke();
         ctx.setLineDash([]);
+        if (cursor !== null) {
+          const text = `${(sample / RATE).toFixed(3)} s`;
+          const textWidth = ctx.measureText(text).width;
+          const textX = Math.max(left, Math.min(x + 5, left + w - textWidth - 5));
+          ctx.fillStyle = "rgba(8,16,22,.88)";
+          ctx.fillRect(textX - 3, top + 3, textWidth + 6, 16);
+          ctx.fillStyle = "#fff";
+          ctx.fillText(text, textX, top + 15);
+        }
       }
     };
     raf = requestAnimationFrame(draw);
@@ -302,11 +322,18 @@ export function Spectrogram({
           x: event.clientX,
           end: viewport.range(store).end,
           span: viewport.span,
+          moved: false,
         };
-        event.currentTarget.dataset.dragging = "true";
       }}
       onPointerMove={(event) => {
-        if (!drag.current) return;
+        if (!drag.current) {
+          onCursorChange?.(sampleAt(event.currentTarget, event.clientX), false);
+          return;
+        }
+        if (!drag.current.moved && Math.abs(event.clientX - drag.current.x) < 4) return;
+        drag.current.moved = true;
+        event.currentTarget.dataset.dragging = "true";
+        onCursorChange?.(null, false);
         viewport.seek(
           drag.current.end -
             drag.current.span -
@@ -317,9 +344,12 @@ export function Spectrogram({
         onNavigate();
       }}
       onPointerUp={(event) => {
+        if (drag.current && !drag.current.moved)
+          onCursorChange?.(sampleAt(event.currentTarget, event.clientX), true);
         drag.current = null;
         delete event.currentTarget.dataset.dragging;
       }}
+      onPointerLeave={() => { if (!drag.current) onCursorChange?.(null, false); }}
       onPointerCancel={(event) => {
         drag.current = null;
         delete event.currentTarget.dataset.dragging;
@@ -347,5 +377,96 @@ export function Spectrogram({
         onNavigate();
       }}
     />
+  );
+}
+
+/** Phase extents stop at the last received sample; message ticks are instants, not durations. */
+export function PhaseAnnotations({
+  store,
+  viewport,
+  phases,
+  endpoint,
+  stream,
+  onSelectPhase,
+  cursor = null,
+  clock = () => store.latest,
+}: {
+  store: SignalStore;
+  viewport: PlotViewport;
+  phases: PhaseStore;
+  endpoint: Endpoint;
+  stream: number;
+  onSelectPhase: (sample: number) => void;
+  cursor?: number | null;
+  clock?: () => number;
+}) {
+  const [, update] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(() => update((value) => value + 1), 100);
+    return () => clearInterval(timer);
+  }, []);
+  const { start, end } = viewport.range(store);
+  const percent = (sample: number) => ((sample - start) / viewport.span) * 100;
+  const direction = stream < 2 ? "tx" : "rx";
+  const intervals = phases.intervals(endpoint, store.latest).filter((phase) => phase.end > start && phase.sample < end && phase.end > phase.sample);
+  const messages = phases.messages(endpoint, direction).filter((event) => event.sample_index >= start && event.sample_index <= Math.min(end, store.latest));
+  const name = endpoint === "caller" ? "Caller" : "Answerer";
+  const sample = cursor ?? clock();
+  const active = phases.intervals(endpoint, store.latest).find((phase) => phase.sample <= sample &&
+    (sample < phase.end || phase.end === store.latest && sample === phase.end));
+  const lastMessage = phases.messages(endpoint, direction).filter((event) =>
+    event.sample_index <= sample && event.sample_index >= (active?.sample ?? Infinity)).at(-1);
+  const cursorVisible = sample >= start && sample <= Math.min(end, store.latest);
+  return (
+    <div className="phase-annotations" aria-label={`${name} handshake and negotiation timeline`} data-start-sample={start} data-end-sample={end}>
+      <div className="phase-band" aria-label={`${name} call phases`}>
+        {intervals.map((phase) => {
+          const left = Math.max(start, phase.sample);
+          const right = Math.min(end, phase.end);
+          const timing = `${(phase.sample / RATE).toFixed(3)}–${(phase.end / RATE).toFixed(3)} s`;
+          return (
+            <button
+              key={`${phase.sample}:${phase.label}`}
+              className="phase-interval"
+              data-phase={phase.label}
+              data-sample={phase.sample}
+              style={{ left: `${percent(left)}%`, width: `${((right - left) / viewport.span) * 100}%` }}
+              title={`${phase.label} · ${timing}\n${phase.detail}`}
+              aria-label={`${name} phase ${phase.label}, ${timing}. ${phase.detail}`}
+              onClick={() => onSelectPhase(Math.max(store.earliest, phase.sample))}
+            >{phase.label}</button>
+          );
+        })}
+        {intervals.length === 0 && <span className="phase-empty">Call phases appear here</span>}
+        {cursorVisible && <span className="phase-cursor" style={{ left: `${percent(sample)}%` }} />}
+      </div>
+      <div className="phase-band message-band" aria-label={`${name} ${direction === "tx" ? "transmitted" : "received"} negotiation messages`}>
+        {messages.map((event, i) => {
+          const message = event.negotiation!;
+          const label = `${message.signal ?? "Signal"}${direction === "rx" ? " received" : ""}`;
+          const next = messages[i + 1]?.sample_index ?? Math.min(end, store.latest);
+          const width = Math.max(0, ((next - event.sample_index) / viewport.span) * 100);
+          const description = `${message.protocol ?? "Negotiation"} ${label} at ${(event.sample_index / RATE).toFixed(3)} s · ${message.validation ?? "observed"}`;
+          return (
+            <button
+              key={`${event.sample_index}:${message.signal}:${i}`}
+              className="phase-message"
+              style={{ left: `${percent(event.sample_index)}%`, width: `${width}%` }}
+              data-sample={event.sample_index}
+              data-signal={message.signal}
+              title={`${description}\n${event.detail}`}
+              aria-label={`${name} ${description}`}
+              onClick={() => onSelectPhase(event.sample_index)}
+            ><span>{label}</span></button>
+          );
+        })}
+        {messages.length === 0 && <span className="phase-empty">{direction === "tx" ? "TX" : "RX"} negotiation markers</span>}
+        {cursorVisible && <span className="phase-cursor" style={{ left: `${percent(sample)}%` }} />}
+      </div>
+      <output className="phase-caption" aria-label={`${name} phase at cursor`}>
+        {(sample / RATE).toFixed(3)} s · {active?.label ?? "No recorded phase"}
+        {lastMessage && ` · last ${direction.toUpperCase()} ${lastMessage.negotiation?.signal}`}
+      </output>
+    </div>
   );
 }

@@ -80,3 +80,9 @@ Optional `state.negotiation` reports protocol, stage, selection, outcome and ind
 `negotiation_message` events add a structured `negotiation` object with `protocol`, `signal`, `direction` (`tx`/`rx`), `raw_hex`, parsed `fields`, `validation`, `repetitions` and `reason`. RX markers use decision sample indices; TX markers use the next fixed render boundary when responses are scheduled by a receive decision. Telephone-prefix offsets are included in all public event timestamps.
 
 Control observations use fixed 960-sample windows independently of the caller's `process()` block partition. The frontend retains 200 negotiation markers separately from its rolling 500-event log so Auto chat does not immediately erase startup inspection. Restart clears both. Binary signal packet v1 is unchanged; control tones pass through the existing line, spectra and audio transport.
+
+## Shared cursor and phase overlays
+
+Both spectrograms and their annotation lanes share one sample cursor and time viewport. Hover inspects a time, click pins it and holds the displayed range, and Follow live clears it while the engine continues. With no explicit cursor in history, the cursor follows the visible range's end rather than an off-screen live clock. Event and phase selection use the same cursor.
+
+Semantic graph history retains `call_stage_changed`, `negotiation_message` and `disconnected` events independently of decoded-byte logs. It prunes with the five-minute signal history while carrying the phase active at its oldest boundary. Stage intervals end at the next event or the latest received signal sample; they never annotate future samples. TX/RX negotiation markers represent actual transmission starts or received decode completions, selected according to each plot's signal view. Caption text reports each endpoint's recorded phase at the cursor. Restart clears the semantic history and cursor.

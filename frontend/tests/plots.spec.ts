@@ -38,6 +38,16 @@ test("both plots share zoom, wheel, drag, history and live navigation", async ({
         metrics: { processing_ms: 2, overruns: 0, display_gaps: 0 },
       }),
     );
+    for (const [endpoint, seconds, detail] of [
+      ['caller', 20, 'training: Acquiring received modem'],
+      ['answerer', 22, 'training: Acquiring received modem'],
+      ['caller', 26, 'connected: Ready for actual text'],
+      ['answerer', 27, 'connected: Ready for actual text'],
+    ] as const) route.send(JSON.stringify({type:'event',generation:1,endpoint,
+      sample_index:seconds*48000,event_type:'call_stage_changed',detail}));
+    route.send(JSON.stringify({type:'event',generation:1,endpoint:'caller',sample_index:24*48000,
+      event_type:'negotiation_message',detail:'V.8 CM transmitted',
+      negotiation:{protocol:'V.8',signal:'CM',direction:'tx',raw_hex:'c1 05 12',validation:'valid'}}));
   });
   await page.routeWebSocket(/\/ws\/data\//, (route) => {
     const frames = 960,
@@ -90,6 +100,35 @@ test("both plots share zoom, wheel, drag, history and live navigation", async ({
   await expect
     .poll(() => plots.first().getAttribute("data-end-sample"))
     .toBe(String(30 * 48000));
+  const callerBox = await plots.first().boundingBox();
+  if (!callerBox) throw new Error('Missing caller plot');
+  const initialRange = await ranges();
+  await page.mouse.move(callerBox.x + 36 + (callerBox.width-48)*0.4, callerBox.y+80);
+  await expect.poll(async () => {
+    const cursors = await plots.evaluateAll(elements => elements.map(el=>el.getAttribute('data-cursor-sample')));
+    return cursors[0] !== null && cursors[0] === cursors[1] && Number(cursors[0]) < 30*48000;
+  }).toBe(true);
+  const hovered = await plots.first().getAttribute('data-cursor-sample');
+  await page.mouse.click(callerBox.x + 36 + (callerBox.width-48)*0.4, callerBox.y+80);
+  await page.mouse.move(10,10);
+  await expect.poll(() => plots.first().getAttribute('data-cursor-sample')).toBe(hovered);
+  expect(await ranges()).toEqual(initialRange); // A click pins; it must not pan.
+  await page.getByLabel('Shared graph navigation').getByRole('button',{name:'Follow live',exact:true}).click();
+  await page.mouse.move(10,10);
+  await expect.poll(() => plots.first().getAttribute('data-cursor-sample')).toBe(String(30*48000));
+  const callerPhases = page.getByLabel('Caller handshake and negotiation timeline',{exact:true});
+  const answererPhases = page.getByLabel('Answerer handshake and negotiation timeline',{exact:true});
+  await expect(callerPhases).toContainText('Training');
+  await expect(callerPhases).toContainText('Data');
+  await callerPhases.getByRole('button',{name:/V\.8 CM at 24\.000/}).click();
+  await expect.poll(() => plots.first().getAttribute('data-cursor-sample')).toBe(String(24*48000));
+  await expect.poll(() => plots.last().getAttribute('data-cursor-sample')).toBe(String(24*48000));
+  await expect(callerPhases).toContainText('Training');
+  await expect(answererPhases).toContainText('Training');
+  await page.getByLabel('Caller signal view').selectOption('2');
+  await expect(callerPhases.getByRole('button',{name:/V\.8 CM at/})).toHaveCount(0);
+  await page.getByLabel('Caller signal view').selectOption('0');
+  await page.getByLabel('Shared graph navigation').getByRole('button',{name:'Follow live',exact:true}).click();
   await page
     .getByRole("button", { name: "Zoom in both graphs", exact: true })
     .click();
@@ -103,6 +142,9 @@ test("both plots share zoom, wheel, drag, history and live navigation", async ({
   await expect
     .poll(() => plots.first().getAttribute("data-end-sample"))
     .toBe(String(27 * 48000));
+  await page.mouse.move(10,10);
+  await expect.poll(() => plots.first().getAttribute('data-cursor-sample')).toBe(String(27*48000));
+  await expect.poll(() => plots.last().getAttribute('data-cursor-sample')).toBe(String(27*48000));
   await aligned();
   await expect(page.getByLabel("Shared graph time range")).toContainText(
     "history",
