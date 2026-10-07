@@ -2,6 +2,16 @@
 
 A local audio modem simulator. Exchange text between two modems, listen to the call, inspect signals, and experiment with phone-line noise and delay. Includes Bell 103-style 300 bit/s FSK and experimental 1200/2400 bit/s modes.
 
+## Screenshots
+
+Auto chat exchanging messages between the caller and answerer, with live signal spectrograms.
+
+![Auto chat with live caller and answerer spectrograms](docs/auto-chat.png)
+
+Receiver diagnostics showing symbol decisions for the experimental 1200 bit/s mode.
+
+![Caller and answerer receiver symbol decisions](docs/receiver-diagnostics.png)
+
 ## Requirements
 
 - Python 3.11+
