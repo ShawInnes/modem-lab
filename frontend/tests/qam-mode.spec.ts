@@ -1,0 +1,23 @@
+import {test, expect} from '@playwright/test';
+test('2400 bit/s carries real Auto chat and exposes 16-QAM symbols and timing', async({page}) => {
+  await page.goto('/');
+  await expect(page.getByText('IDLE · Connected',{exact:true})).toBeVisible();
+  await page.getByLabel('Modem profile').selectOption('qam2400');
+  await expect(page.getByLabel('Modem profile')).toHaveValue('qam2400');
+  await expect(page.getByText(/Experimental V.22bis-style 16-QAM/)).toBeVisible();
+  await page.getByLabel('Auto chat',{exact:true}).check();
+  await expect(page.getByLabel('Call progress')).toContainText('dialing');
+  await expect(page.getByLabel('Answerer received text')).toContainText('#00 A hi',{timeout:12000});
+  await expect(page.getByLabel('Caller received text')).toContainText('#01 B ok',{timeout:6000});
+  await expect(page.getByRole('img',{name:'Caller received 16-QAM constellation',exact:true})).toBeVisible();
+  await expect(page.getByLabel('Caller receiver diagnostics')).toContainText('Four bits per symbol');
+  await expect(page.getByLabel('Answerer receiver diagnostics')).toContainText('600 symbols/s');
+  await expect(page.getByLabel('Caller receiver diagnostics')).toContainText('Latest quadbit');
+  await expect(page.getByLabel('Caller receiver diagnostics')).toContainText('16 targets');
+  await page.getByLabel('Receiver diagnostic view').selectOption('eye');
+  await expect(page.getByLabel('Caller receiver diagnostics')).toContainText('Four levels');
+  await expect(page.locator('footer')).toContainText('Audio: playing');
+  await page.getByRole('button',{name:'Hang up',exact:true}).click();
+  await expect(page.getByLabel('Auto chat',{exact:true})).not.toBeChecked();
+  await expect(page.getByLabel('Call progress')).toContainText('Call idle');
+});

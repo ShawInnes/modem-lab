@@ -1,0 +1,23 @@
+import { test, expect } from '@playwright/test';
+test('1200 bit/s profile decodes both directions and shows live phase decisions', async ({page}) => {
+  await page.goto('/');
+  await expect(page.getByText('IDLE · Connected', {exact:true})).toBeVisible();
+  await page.getByLabel('Modem profile').selectOption('dqpsk1200');
+  await expect(page.getByLabel('Modem profile')).toHaveValue('dqpsk1200');
+  await expect(page.getByText(/Experimental V.22-style differential QPSK/)).toBeVisible();
+  await page.getByLabel('Text from caller').fill('Phase changes carry pairs of bits!');
+  await page.getByLabel('Text from answerer').fill('1200 bits, 600 symbols.');
+  await page.getByRole('button',{name:'Queue',exact:true}).first().click();
+  await page.getByRole('button',{name:'Queue',exact:true}).last().click();
+  await page.getByRole('button',{name:'Start call',exact:false}).click();
+  await expect(page.getByLabel('Caller received text')).toHaveText('1200 bits, 600 symbols.',{timeout:12000});
+  await expect(page.getByLabel('Answerer received text')).toHaveText('Phase changes carry pairs of bits!',{timeout:12000});
+  await expect(page.getByLabel('Caller receiver diagnostics')).toContainText('600 symbols/s');
+  await expect(page.getByLabel('Caller receiver diagnostics')).toContainText('Latest dibit');
+  await page.getByLabel('Receiver diagnostic view').selectOption('eye');
+  await expect(page.getByLabel('Answerer receiver diagnostics')).toContainText('Matched-filter magnitude');
+  await page.getByLabel('Modem profile').selectOption('bell103');
+  await expect(page.getByText('LIVE · Connected',{exact:true})).toBeVisible();
+  await expect(page.getByLabel('Caller received text')).toHaveText('Waiting for decoded text…');
+  await expect(page.getByLabel('Caller receiver diagnostics')).toContainText('300 symbols/s');
+});

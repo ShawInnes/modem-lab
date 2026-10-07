@@ -1,0 +1,26 @@
+import {test, expect} from '@playwright/test';
+test('audible pickup and handshake gate queued text and can be interrupted', async({page}) => {
+  await page.goto('/');
+  await expect(page.getByText('IDLE · Connected',{exact:true})).toBeVisible();
+  await page.getByLabel('Text from caller').fill('After the handshake');
+  await page.getByRole('button',{name:'Queue',exact:true}).first().click();
+  await page.getByRole('button',{name:'Start call',exact:false}).click();
+  await expect(page.getByLabel('Listen to signal')).toHaveValue('3');
+  await expect(page.getByLabel('Call progress')).toContainText('dialing');
+  await expect(page.getByLabel('Answerer received text')).toHaveText('Waiting for decoded text…');
+  await expect(page.getByLabel('Call progress')).toContainText('ringing');
+  await expect(page.getByLabel('Answerer received text')).toHaveText('Waiting for decoded text…');
+  await expect(page.getByLabel('Call progress')).toContainText('settling',{timeout:6000});
+  await expect(page.getByLabel('Answerer received text')).toHaveText('Waiting for decoded text…');
+  await expect(page.getByLabel('Call progress')).toContainText('Call connected',{timeout:6000});
+  await expect(page.getByLabel('Answerer received text')).toHaveText('After the handshake',{timeout:6000});
+  await expect(page.getByLabel('Session events')).toContainText('pickup:');
+  await expect(page.locator('footer')).toContainText('Audio: playing');
+  await page.getByLabel('Listen to signal').selectOption('0');
+  await page.getByRole('button',{name:'Restart',exact:false}).click();
+  await expect(page.getByLabel('Listen to signal')).toHaveValue('3');
+  await expect(page.getByLabel('Call progress')).toContainText('dialing');
+  await page.getByRole('button',{name:'Hang up',exact:true}).click();
+  await expect(page.getByLabel('Call progress')).toContainText('Call idle');
+  await expect(page.getByLabel('Answerer received text')).toHaveText('Waiting for decoded text…');
+});
