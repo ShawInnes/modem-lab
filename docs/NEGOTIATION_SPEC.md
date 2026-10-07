@@ -2,7 +2,7 @@
 
 ## Status and goal
 
-Specification for a future implementation; this document does not implement negotiation.
+Design specification with a playable experimental implementation now available. The implemented subset and remaining extensions are recorded below; the requirements remain the reference for further work.
 
 Make V.8 negotiation and an optional preceding V.8bis capabilities exchange audible, visible and understandable in the live workbench. The user should see each device announce its capabilities, watch the other device decode those announcements, and understand why a mode was selected or why negotiation failed. Build this incrementally with playable checkpoints.
 
@@ -177,3 +177,11 @@ Initially label the features **experimental V.8 negotiation** and **experimental
 Keep negotiation logic separate from per-profile training and decoding. Extend existing state/event transport with structured negotiation telemetry, preserving session/generation isolation and bounded event history. Store actual parsed fields and sample timestamps so the inspector can explain decisions consistently.
 
 V.34/V.90 payload DSP, channel probing for those modes, in-call voice/data switching, compression, error-control protocols and physical phone interfaces are not part of this implementation plan. The initial V.8bis scope is pre-startup data-modem capability negotiation, not every operating mode covered by the standard.
+
+## Current playable checkpoint
+
+Implemented: actual V.21 control audio; CI/ANSam and repeated CM/JM/CJ; independent family capability controls; V.8bis post-pickup transaction 2 (CRd → CL → MS → ACK(1)) initiated by either device; valid HDLC framing and frame checks; full V.8 handoff; experimental 1200/2400 payload acquisition; real terminal/Auto chat traffic; structured inspection of transmitted and received messages; incompatible-capability failures and unsupported-V.8bis fallback. Modem roles follow the MS sender/receiver when the answering telephone initiates the transaction.
+
+V.8 shares the V.22/V.22bis family flag; V.8bis has separate mode bits for those alternatives. The current UI enables that family as a whole. V.8-only calls preconfigure their payload rate, while the supported V.8bis transaction explicitly proposes the chosen payload mode. These are distinct outcomes in the inspector.
+
+Remaining extensions: the poster's automatic-answer CRe/ESr opening, other V.8bis transactions and collision handling, segmentation, shortened V.8, configurable rate ceilings and complete V.22bis rate selection, legacy V.25 fallback, other capability families and hardware interoperability. The current controller rejects unsupported parameter trees and operates on 20 ms scheduling boundaries. See [FIDELITY.md](FIDELITY.md) for the precise implementation limits; internal successful calls are not a standards-compliance claim.

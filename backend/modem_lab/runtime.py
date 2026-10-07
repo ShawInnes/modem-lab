@@ -42,8 +42,11 @@ class Runtime:
 
     def events(self, events):
         for event in events:
-            self.emit(dict(type="event", sample_index=event["sample_index"], endpoint=event["endpoint"],
-                           event_type=event["type"], detail=event["detail"]))
+            message = dict(type="event", sample_index=event["sample_index"], endpoint=event["endpoint"],
+                           event_type=event["type"], detail=event["detail"])
+            if "negotiation" in event:
+                message["negotiation"] = event["negotiation"]
+            self.emit(message)
 
     def state(self):
         self.emit(dict(type="state", sample_index=self.engine.sample, active=self.active,
@@ -51,6 +54,7 @@ class Runtime:
                        auto_chat_status=self.auto_chat.status(self.engine),
                        config=asdict(self.config), actual_seed=self.engine.config.seed,
                        actual_profile=self.engine.config.profile,
+                       negotiation=self.engine.setup.telemetry() if self.engine.setup and hasattr(self.engine.setup, "telemetry") else None,
                        diagnostics={e: self.engine.rx[e].diagnostics() for e in ENDPOINTS},
                        endpoints={e: dict(state=(self.engine.setup.stages[e] if self.engine.setup and self.active and not self.engine.setup.ready[e]
                                                  else self.engine.rx[e].state) if self.active or self.engine.sample or not self.engine.active else "idle",
@@ -85,7 +89,9 @@ class Runtime:
                     before = len(self.engine.events)
                 self.active = True
             elif kind == "select_profile":
-                config = replace(self.config, profile=command.get("profile"))
+                profile = command.get("profile")
+                config = replace(self.config, profile=profile,
+                                 call_setup_mode="direct" if profile == "bell103" else self.config.call_setup_mode)
                 if config.profile != self.engine.config.profile:
                     self.config = config
                     self.reset()
@@ -109,6 +115,9 @@ class Runtime:
                 if not isinstance(values, dict):
                     raise ValueError("Configuration must be an object")
                 config = SessionConfig(**{**asdict(self.config), **values})
+                negotiation_keys = ("call_setup_mode", "caller_capabilities", "answerer_capabilities", "caller_v8bis", "answerer_v8bis", "bis_initiator")
+                if self.active and any(getattr(config, key) != getattr(self.config, key) for key in negotiation_keys):
+                    raise ValueError("Hang up before changing negotiation settings")
                 if not self.engine.active:
                     self.config = config
                 elif self.engine.sample == 0:

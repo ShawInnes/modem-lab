@@ -2,6 +2,12 @@ export type Endpoint = "caller" | "answerer";
 export interface Config {
   profile?: string;
   call_setup?: boolean;
+  call_setup_mode?: "direct" | "v8" | "v8bis";
+  caller_capabilities?: string[];
+  answerer_capabilities?: string[];
+  caller_v8bis?: boolean;
+  answerer_v8bis?: boolean;
+  bis_initiator?: Endpoint;
   snr_db: number;
   delay_ms: number;
   echo_attenuation_db: number;
@@ -38,6 +44,7 @@ export interface SessionState {
   actual_seed?: number;
   actual_profile?: string;
   diagnostics?: Record<Endpoint, ReceiverDiagnostics>;
+  negotiation?: NegotiationState;
   config: Config;
   endpoints: Record<Endpoint, EndpointState>;
   metrics: { processing_ms: number; overruns: number; display_gaps: number };
@@ -49,6 +56,42 @@ export interface LabEvent {
   endpoint: Endpoint;
   event_type: string;
   detail: string;
+  negotiation?: NegotiationMessage;
+}
+export interface NegotiationMessage {
+  protocol?: string;
+  signal?: string;
+  direction?: "tx" | "rx";
+  raw_hex?: string;
+  fields?: Record<string, unknown>;
+  validation?: string;
+  repetitions?: number;
+  reason?: string;
+}
+export interface NegotiationEndpoint {
+  stage?: string;
+  tx_signal?: string;
+  rx_state?: string;
+  offered?: string[];
+  received?: string[];
+  menu_hex?: string;
+  repetitions?: number;
+  validation?: string;
+  selected?: string;
+  selected_family?: string;
+  selected_profile?: string;
+  v8bis_selected_profile?: string;
+  transmitted?: NegotiationMessage[];
+  messages?: NegotiationMessage[];
+}
+export interface NegotiationState {
+  mode?: string;
+  protocol?: string;
+  stage?: string;
+  selected_profile?: string;
+  selected_family?: string;
+  outcome?: string;
+  endpoints?: Partial<Record<Endpoint, NegotiationEndpoint>>;
 }
 export interface Packet {
   generation: number;

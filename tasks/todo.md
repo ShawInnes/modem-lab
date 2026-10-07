@@ -76,3 +76,15 @@ Auto chat verified: 75 Python tests pass. Both real modulation profiles carry ei
 - [x] Verify long duplex payloads, unknown phase/alignment, channel/noise, partition equivalence and browser lifecycle.
 
 2400 checkpoint verified: 91 Python tests and nine browser tests pass; production frontend build passes. Official V.22bis Table 1 and Figure 2 were visually checked for differential quadrant and within-quadrant mapping. Independent PCM integration verifies all 16 wire quadbits; long full-duplex ASCII, unknown carrier phase and symbol offset, fractional delays, framing rejection, silence/carrier loss, noise degradation, complete call lifecycle and bounded Auto chat pass. CLI recovered both 2400 messages exactly with zero framing errors. Native Chrome inspection confirms two live 16-point amplitude-preserving constellations, actual quadbit decisions and four-level timing view; the app is left running 2400 Auto chat. Standard shaping/scrambling/equalization, full1200-to2400 negotiation/fallback and hardwareinterop are explicitly outside the implemented experimental fidelity.
+# V.8 and V.8bis live negotiation
+
+- [x] Review standard encodings and separate V.8bis transactions from V.8 menus.
+- [x] Implement independent audio control channels, answer-tone detection and negotiation state machines.
+- [x] Integrate negotiated startup and payload handoff with the live engine.
+- [x] Add capability controls and inspectable transmitted/received negotiation messages.
+- [x] Verify clean calls, incompatible capabilities, corruption/timeouts and processing-block independence.
+- [x] Build and exercise the browser workbench; document fidelity and playable checkpoints.
+
+Negotiation checkpoint verified: 132 Python tests pass, including 27 independent wire/audio/parser checks and 14 integrated calls. All 13 browser tests pass (nine prior workbench checks and four negotiation checks). Both payload rates recover exact duplex text after V.8 or V.8bis/full-V.8; either V.8bis initiator works with correct modem-role and carrier remapping; 1000 ms propagation, asymmetric V.8bis fallback, no-common failures and 137/960-sample partition equivalence pass. ANSam rejects plain/nearby tones and tested noise; damaged HDLC frames and missing CJ cannot establish remote agreement; self-echo-only probes do not connect. Production build, compile and diff checks pass. Native Chrome inspection confirms decoded CL bytes/fields, subsequent CM/JM/CJ, ready payload receivers and actual changing Auto chat text.
+
+Implemented fidelity is a restricted transparent-data capability subset with V.8bis post-pickup transaction 2 and full V.8. The poster's automatic-answer CRe/ESr path, shortened V.8, other transactions/collisions, segmentation, legacy V.25 fallback and complete payload rate training remain later extensions. Control scheduling is 20 ms; interoperability is unverified. See docs/FIDELITY.md and docs/NEGOTIATION_SPEC.md.

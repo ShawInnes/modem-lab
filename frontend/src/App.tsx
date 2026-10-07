@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ReceiverDiagnosticsPanel } from "./diagnostics";
+import { NegotiationControls, NegotiationInspector } from "./negotiation";
 import { AudioMonitor } from "./audio";
 import {
   decodePacket,
@@ -56,6 +57,7 @@ export default function App() {
       () => localStorage.getItem("modem-theme") || "dark",
     );
   const [events, setEvents] = useState<LabEvent[]>([]),
+    [negotiationEvents, setNegotiationEvents] = useState<LabEvent[]>([]),
     [selected, setSelected] = useState<LabEvent | null>(null),
     [received, setReceived] = useState<Record<Endpoint, string>>({
       caller: "",
@@ -157,6 +159,7 @@ export default function App() {
       audio.reset(g);
       setSelected(null);
       setEvents([]);
+      setNegotiationEvents([]);
       setReceived({ caller: "", answerer: "" });
       setLocal({ caller: "", answerer: "" });
     }
@@ -249,6 +252,8 @@ export default function App() {
           if (m.generation < generation.current) return;
           if (m.generation > generation.current) reset(m.generation);
           setEvents((prev) => [...prev, m].slice(-500));
+          if (m.negotiation || /negotiation|v8|menu|ansam|capabilit/.test(m.event_type))
+            setNegotiationEvents((prev) => [...prev, m].slice(-200));
           if (m.endpoint === "caller" || m.endpoint === "answerer") {
             const e = m.endpoint as Endpoint;
             if (m.event_type === "decoded_byte") {
@@ -442,6 +447,8 @@ export default function App() {
           </button>
         )}
       </div>
+      <NegotiationControls config={state.config} disabled={connection !== "Connected" || state.active}
+        configure={configure} />
       <div className="fidelity">
         {state.actual_profile === "qam2400"
           ? "Experimental V.22bis-style 16-QAM · 4 bits/symbol · simplified shaping/handshake · hardware interoperability unverified"
@@ -449,6 +456,7 @@ export default function App() {
           ? "Experimental V.22-style differential QPSK · 2 bits/symbol · simplified shaping/handshake · hardware interoperability unverified"
           : "Real FSK modulation and receiver decoding · answer-first carrier handshake · hardware interoperability unverified"}
         <span> · Changing profile starts a fresh session and clears queued text.</span>
+        {state.config.call_setup_mode && state.config.call_setup_mode !== "direct" && <span>{state.config.call_setup_mode === 'v8bis' ? ' · V.8bis proposes the chosen payload mode, then V.8 confirms its family.' : ' · V.8 selects the V.22/V.22bis family; payload rate remains preconfigured.'} Bell 103 requires direct setup.</span>}
       </div>
       <div className="call-progress" role="status" aria-label="Call progress">
         <strong>{!state.active ? "Call idle" : Object.values(state.endpoints).some((e) => e.call_stage === "failed") ? "Call failed" : Object.values(state.endpoints).every((e) => e.transmit_ready) ? "Call connected" : "Call setup"}</strong>
@@ -578,6 +586,12 @@ export default function App() {
           ))}
         </div>
         <ReceiverDiagnosticsPanel diagnostics={state.diagnostics} />
+        <NegotiationInspector config={state.config} negotiation={state.negotiation} events={negotiationEvents} selected={selected}
+          selectEvent={(event) => {
+            viewport.focus(event.sample_index, store);
+            updateNavigation((value) => value + 1);
+            setSelected(event);
+          }} />
         <section className="panel inspector">
           <div className="panel-head">
             <h2>Carrier & event inspector</h2>

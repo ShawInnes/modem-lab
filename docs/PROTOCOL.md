@@ -70,3 +70,13 @@ Sends are separated by at least 48,000 samples, and only one automated message m
 ## 16-QAM diagnostics
 
 Profile `qam2400` adds diagnostics mode `qam16`. Symbol coordinates are carrier/gain-corrected lattice units (targets ±1/±3), not normalized to unit radius. `decision` is the actual four wire bits as an integer 0–15. Optional `constellation` contains 16 `[i,q,lastTwoBitsLabel]` target rows. The first dibit is differential quadrant change, so a static point cannot be labeled with a complete quadbit. The trace is corrected real I, rather than phase-mode magnitude. The same 600 symbols/s, sample clock, bounded telemetry, queues and live binary transport apply.
+
+## Negotiated startup
+
+`configure` adds `call_setup_mode` (`direct`, `v8`, `v8bis`), `caller_capabilities` and `answerer_capabilities` (each `["v22"]` or `[]`), boolean `caller_v8bis`/`answerer_v8bis`, and `bis_initiator` (`caller` or `answerer`). Negotiation requires call setup and a phase/QAM profile. Configuration normalizes capability arrays to immutable tuples internally. Change negotiation settings while idle; active changes are rejected. Choosing Bell 103 resets setup to direct.
+
+Optional `state.negotiation` reports protocol, stage, selection, outcome and independent endpoint snapshots. Endpoint fields include current transmit signal, last decoded control signal, local offer, actual received family fields, raw menu octets, repetition count and payload modem role. This telemetry is for inspection; it does not supply remote information to the receiver.
+
+`negotiation_message` events add a structured `negotiation` object with `protocol`, `signal`, `direction` (`tx`/`rx`), `raw_hex`, parsed `fields`, `validation`, `repetitions` and `reason`. RX markers use decision sample indices; TX markers use the next fixed render boundary when responses are scheduled by a receive decision. Telephone-prefix offsets are included in all public event timestamps.
+
+Control observations use fixed 960-sample windows independently of the caller's `process()` block partition. The frontend retains 200 negotiation markers separately from its rolling 500-event log so Auto chat does not immediately erase startup inspection. Restart clears both. Binary signal packet v1 is unchanged; control tones pass through the existing line, spectra and audio transport.

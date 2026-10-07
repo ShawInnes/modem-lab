@@ -585,3 +585,37 @@ footer {
 .hear-setup input { width: auto; accent-color: var(--a); }
 .call-progress { padding: 9px 14px; margin-top: 8px; border: 1px solid var(--edge); border-radius: 7px; display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 12px; background: var(--paper); }
 .call-progress small { flex-basis: 100%; color: var(--dim); font-size: 10px; }
+
+.setup-controls { padding: 0 28px 14px; }
+.setup-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.setup-heading label { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.capability-options { margin-top: 10px; border: 1px solid var(--edge); border-radius: 7px; padding: 10px; }
+.capability-options summary { padding: 0 0 6px; }
+.capability-presets { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin: 5px 0 12px; }
+.capability-presets button { min-height: 28px; padding: 4px 8px; font-size: 11px; }
+.capability-pair { gap: 12px; }
+.capability-pair fieldset { border: 1px solid var(--edge); border-radius: 6px; padding: 8px 12px; margin: 0 0 8px; min-width: 0; }
+.capability-pair legend { font-size: 12px; color: var(--a); }
+.capability-pair .answerer legend { color: var(--b); }
+.capability-pair label { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.capability-pair input { min-height: 20px; accent-color: var(--a); }
+.negotiation-inspector { margin-top: 18px; }
+.negotiation-result { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 0 15px 12px; font-size: 12px; }
+.negotiation-result p { flex-basis: 100%; }
+.negotiation-pair { padding: 0 15px 15px; }
+.negotiation-pair article { padding: 10px; background: var(--paper); border: 1px solid var(--edge); border-radius: 6px; }
+.negotiation-pair h3 { font-size: 13px; margin: 0 0 8px; }
+.negotiation-pair p { font-size: 11px; }
+.menu-bytes { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
+.menu-bytes code { font-size: 11px; overflow-wrap: anywhere; }
+.selected-negotiation { border-top: 1px solid var(--edge); padding: 12px 15px; }
+.negotiation-message strong { font-size: 12px; }
+.menu-fields { padding: 8px 0 0; font-size: 11px; max-height: 180px; }
+.negotiation-timeline { max-height: 200px; overflow: auto; border-top: 1px solid var(--edge); }
+.negotiation-footnote { padding: 10px 15px; font-size: 10px; }
+@media (max-width: 760px) {
+  .setup-controls { padding: 0 16px 14px; }
+  .setup-heading label { flex-wrap: wrap; }
+  .setup-heading select { max-width: calc(100vw - 32px); }
+}
+.setup-warning { margin-top: 8px; font-size: 12px; color: var(--b); }

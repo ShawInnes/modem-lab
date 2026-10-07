@@ -18,6 +18,12 @@ class SessionConfig:
     seed: int = 103
     profile: str = "bell103"
     call_setup: bool = True
+    call_setup_mode: str = "direct"
+    caller_capabilities: tuple = ("v22",)
+    answerer_capabilities: tuple = ("v22",)
+    caller_v8bis: bool = True
+    answerer_v8bis: bool = True
+    bis_initiator: str = "caller"
 
     def __post_init__(self):
         for key, low, high in (("snr_db", -20, 100), ("delay_ms", 0, 1000),
@@ -27,6 +33,19 @@ class SessionConfig:
                 raise ValueError(f"{key} must be between {low} and {high}")
         if not isinstance(self.call_setup, bool):
             raise ValueError("call_setup must be boolean")
+        if self.call_setup_mode not in ("direct", "v8", "v8bis"):
+            raise ValueError("Unknown call setup mode")
+        if self.bis_initiator not in ENDPOINTS:
+            raise ValueError("V.8bis initiator must be caller or answerer")
+        if self.call_setup_mode != "direct" and (not self.call_setup or self.profile == "bell103"):
+            raise ValueError("Negotiation requires call setup and a 1200 or 2400 bit/s payload profile")
+        for endpoint in ENDPOINTS:
+            values = getattr(self, f"{endpoint}_capabilities")
+            if not isinstance(values, (list, tuple)) or len(values) > 1 or any(v != "v22" for v in values):
+                raise ValueError("Capabilities must contain only the V.22/V.22bis family, or be empty")
+            object.__setattr__(self, f"{endpoint}_capabilities", tuple(values))
+            if not isinstance(getattr(self, f"{endpoint}_v8bis"), bool):
+                raise ValueError("V.8bis support must be boolean")
         if self.profile not in ("bell103", "dqpsk1200", "qam2400"):
             raise ValueError("Unknown modem profile")
         if self.bandpass not in ("flat", "telephone", "narrow"):
@@ -46,8 +65,14 @@ class SessionEngine:
             from .qam import Transmitter as tx_class, Receiver as rx_class
         self.tx = {e: tx_class(e) for e in ENDPOINTS}
         self.rx = {e: rx_class(e) for e in ENDPOINTS}
+        self._payload_classes = (tx_class, rx_class)
+        self._payload_roles = {e: e for e in ENDPOINTS}
+        self._payload_selected = dict.fromkeys(ENDPOINTS, False)
         from .startup import CallSetup
         self.setup = CallSetup(self.config.profile) if self.config.call_setup else None
+        if self.config.call_setup_mode != "direct":
+            from .negotiated_startup import NegotiatedCallSetup
+            self.setup = NegotiatedCallSetup(self.config)
         self.line = PhoneLine(self.config)
         self.pending = {e: [] for e in ENDPOINTS}
         self.ready = {e: False for e in ENDPOINTS}
@@ -81,6 +106,10 @@ class SessionEngine:
             raise ValueError("Live controls apply at a 960-sample boundary")
         if config.call_setup != self.config.call_setup:
             raise ValueError("Changing call setup requires a new session")
+        if any(getattr(config, key) != getattr(self.config, key) for key in (
+            "call_setup_mode", "caller_capabilities", "answerer_capabilities", "caller_v8bis", "answerer_v8bis", "bis_initiator"
+        )):
+            raise ValueError("Changing negotiation requires a new session")
         if config.profile != self.config.profile:
             raise ValueError("Changing modem profile requires a new session")
         if config.seed != self.config.seed:
@@ -124,6 +153,17 @@ class SessionEngine:
                 if self.setup:
                     for sample, endpoint, stage, detail in self.setup.advance(self.sample, {e: self.rx[e].state for e in ENDPOINTS}):
                         self._event(sample, endpoint, "call_stage_changed", f"{stage}: {detail}")
+                    if hasattr(self.setup, "negotiation"):
+                        negotiation = self.setup.negotiation
+                        for e in ENDPOINTS:
+                            if negotiation.selected[e] and not self._payload_selected[e]:
+                                role = negotiation.payload_roles[e]
+                                if role != self._payload_roles[e]:
+                                    tx_class, rx_class = self._payload_classes
+                                    self.tx[e], self.rx[e] = tx_class(role), rx_class(role)
+                                    self.rx[e].sample = self.sample
+                                    self._payload_roles[e] = role
+                                self._payload_selected[e] = True
                 for e in ENDPOINTS:
                     self.ready[e] = self.rx[e].state == "connected" and (self.setup is None or self.setup.ready[e])
                     if self.ready[e] and self.pending[e]:
@@ -155,6 +195,9 @@ class SessionEngine:
                     self._event(sample, e, "decoded_byte", str(byte))
                 for sample, kind, detail in events:
                     self._event(sample, e, kind, detail)
+            if self.setup and hasattr(self.setup, "drain_messages"):
+                for message in self.setup.drain_messages():
+                    self.events.append({**message, "type": "negotiation_message"})
             self.events[segment_event_start:] = sorted(
                 self.events[segment_event_start:], key=lambda event: (event["sample_index"], event["endpoint"])
             )

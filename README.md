@@ -1,8 +1,8 @@
 # Modem Lab
 
-A local laboratory for hearing and inspecting two audio modems. The **interactive workbench** now offers simultaneous Bell 103A2-style 300-bit/s FSK and experimental 1200-bit/s DQPSK, with receiver symbol/timing diagnostics, real transmitted/received spectrograms, independent receiver-decoded terminals, phone-line controls and browser audio. Remote text comes from received audio samples.
+A local laboratory for hearing and inspecting two audio modems. The **interactive workbench** offers simultaneous Bell 103A2-style 300-bit/s FSK, experimental 1200-bit/s DQPSK and 2400-bit/s 16-QAM, with receiver symbol/timing diagnostics, real transmitted/received spectrograms, independent receiver-decoded terminals, phone-line controls and browser audio. Remote text comes from received audio samples.
 
-The visual reference is [docs/mockup.html](docs/mockup.html); its V.32bis handshake and plots are illustrative. Only the functional Bell 103 profile is selectable. Recording/replay is the next checkpoint. See [the implementation plan](tasks/todo.md), [the full specification](docs/SPEC.md) and [live protocol notes](docs/PROTOCOL.md).
+The visual reference is [docs/mockup.html](docs/mockup.html); its V.32bis handshake and plots are illustrative. Recording/playback is deferred by user preference. See [the implementation plan](tasks/todo.md), [the full specification](docs/SPEC.md), [negotiation design](docs/NEGOTIATION_SPEC.md) and [live protocol notes](docs/PROTOCOL.md).
 
 ## Start the interactive workbench
 
@@ -20,6 +20,14 @@ Open **http://127.0.0.1:8000** in a current browser. Queue messages at either te
 Switch each plot between transmitted and received signals, change the line controls while sending text, and click a timestamped event to position both inspection cursors. Both graphs share zoom and pan: use +/−, scroll backward/forward, or drag the history slider. Wheel over either graph to zoom at the pointer; drag horizontally or use Shift-wheel to pan. Focus a graph and use arrow keys to pan, +/− to zoom, Home for the earliest retained signal, or End to follow live. **Follow live** returns both graphs to current signals. The last five minutes of received spectra are retained in memory; older samples expire, and restart/reload clears the history. Audio and the live modem keep running during graph inspection. SNR can go down to −20 dB to exercise receiver corruption. This is live inspection; the engine continues, and recording and playback are outside the current live-lab scope. Hang up cancels pending text. Restart creates a fresh run with current settings and the chosen noise seed.
 
 One browser controls a session. Close its tab before opening another controller; reload starts a new run. Hiding the tab discards audio presentation and re-buffers on return while the engine continues. The footer separates audio underruns, DSP overruns, display gaps and receiver errors.
+
+### Watch capability negotiation
+
+Choose **V.8 · menu negotiation** or **V.8bis → V.8 · capabilities then menus** under **Call setup**, then enable **Auto chat** or start a call. Enabling negotiation from Bell 103 selects the experimental 2400-bit/s payload mode. V.8 agrees the V.22/V.22bis family; its menu does not select the 1200/2400 data rate. The V.8bis transaction can select one of those modes before the full V.8 exchange.
+
+Open **Device capabilities and examples** before calling to disable a device's supported family, try a peer without V.8bis, or choose which device initiates the capability request. The negotiation inspector distinguishes sent and audio-decoded messages; select a marker to inspect raw octets, parsed fields and validation while both graphs align to its time. Terminal traffic waits for negotiation and the actual payload receiver's training.
+
+The V.8bis demonstration implements the post-pickup CRd → CL → MS → ACK(1) transaction with a full V.8 handoff. It is a restricted experimental subset, distinct from the poster's automatic-answer CRe/ESr opening. If the answerer initiates this transaction, it becomes the modem caller after mode selection, so the payload frequency roles swap. See [fidelity notes](docs/FIDELITY.md) for timing and interoperability limits.
 
 For frontend development, keep the backend running and run `npm run dev --prefix frontend` in another terminal; Vite proxies the two WebSockets to port 8000. Production frontend edits need a new build; files are served directly from `frontend/dist`. If port 8000 is occupied, stop the previous service first.
 
